@@ -42,7 +42,6 @@ function MainPage() {
   const [activityStartTime, setactivityStartTime] = useState("");
   const [activities, setActivities] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
-  const [joinedActivities, setJoinedActivities] = useState([]);
 
   const handleOpenCreate = () => setOpenCreate(true);
   const handleCloseCreate = () => setOpenCreate(false);
@@ -66,7 +65,9 @@ function MainPage() {
     return result;
   }
 
+
   async function createActivityApi() {
+
     const activityCode = generateRandomCode(6);
 
     await axios.post(`http://localhost:3000/api/activity`, {
@@ -88,31 +89,22 @@ function MainPage() {
   }
 
   async function joinActivity() {
-    try {
-      console.log("Joining with code:", joinActivitystate); // Debugging code input
-      const res = await axios.get(`http://localhost:3000/api/activityAccess/${joinActivitystate}`);
-      console.log("API Response:", res.data); // Log API response
 
-      if (res.data.msg === "Activity found and it's available") {
-        const joinedActivity = res.data.activity;
-        if (joinedActivity && joinedActivity._id) {
+    await axios.get(`http://localhost:3000/api/activityAccess/${joinActivitystate}`)
+      .then(res => {
+
+        console.log(res)
+        if (res.data.msg == "Activity found and it's available") {
           alert("Activity joined successfully");
-          setJoinedActivities((prev) => {
-            const updatedActivities = [...prev, joinedActivity];
-            console.log("Updated Joined Activities:", updatedActivities); // Log updated state
-            return updatedActivities;
-          });
+
           setOpenJoin(false);
-        } else {
-          alert("Invalid activity data received.");
         }
-      } else {
-        alert("Activity found but it's no longer available");
-      }
-    } catch (err) {
-      console.log("Error Response:", err.response); // Log error response
-      alert(err.response?.data?.msg || "An error occurred");
-    }
+        else alert("Activity found but it's not available anymore.")
+      })
+      .catch(err => {
+        alert(err.response.data.msg)
+        console.log(err)
+      })
   }
 
   async function editActivityApi() {
@@ -121,7 +113,7 @@ function MainPage() {
       activityDescription: activityDescription,
       startTime: activityStartTime.slice(0, activityStartTime.indexOf("GMT")),
     }).then(res => {
-      alert("Activity update successfully");
+      alert("Activity update sucessfully");
       setOpenEdit(false);
       setCurrentActivity(null);
       console.log(res)
@@ -141,18 +133,17 @@ function MainPage() {
   }
 
   useEffect(() => {
+
     axios.get(`http://localhost:3000/api/activitiesPerUser/${location.state._id}`)
-      .then((res) => {
-        const validActivities = res.data.filter((activity) => activity && activity._id);
-        const allActivities = [...validActivities, ...joinedActivities];
-        console.log("Fetched Activities:", allActivities); // Log fetched activities
-        setActivities(allActivities);
+      .then(res => {
+        setActivities(res.data)
+        console.log(res)
       })
-      .catch((err) => {
-        console.log("Error Fetching Activities:", err.response); // Log error details
-        alert(err.response?.data?.msg || "An error occurred while fetching activities.");
-      });
-  }, [location.state._id, joinedActivities]);
+      .catch(err => {
+        alert(err.response.data.msg)
+        console.log(err)
+      })
+  }, [location.state._id]);
 
   return (
     <div>
@@ -286,34 +277,28 @@ function MainPage() {
       </Box>
 
       <Box>
-  {
-    (location.state?.userRole === "Student") && activities?.map(item => {
-      if (!item || !item._id) return null;
-    
-      const isJoined = joinedActivities.some((a) => a._id === item._id);
-    
-      return (
-        <Card key={item._id} sx={{ maxWidth: 345, border: 1, marginLeft: 2 }}>
-          <CardActionArea>
-            <CardContent>
-              <Typography gutterBottom variant="h5" component="div">
-                {item.activityname}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {item.activityDescription}
-              </Typography>
-              <Typography variant="body3" sx={{ color: 'text.secondary' }}>
-                {item.startTime}
-              </Typography>
-              {isJoined && <Typography variant="body2" color="primary">You joined this activity</Typography>}
-            </CardContent>
-          </CardActionArea>
-        </Card>
-      );
-    })
-    
-  }
-</Box>
+        {
+          (location.state?.userRole == "Student") && activities?.map(item => {
+            return (
+              <Card key={item._id} sx={{ maxWidth: 345, border: 1, marginLeft: 2 }}>
+                <CardActionArea onClick={() => handleOpen(item)}>
+                  <CardContent>
+                    <Typography gutterBottom variant="h5" component="div">
+                      {item.activityname}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      {item.activityDescription}
+                    </Typography>
+                    <Typography variant="body3" sx={{ color: 'text.secondary' }}>
+                      {item.startTime}
+                    </Typography>
+                  </CardContent>
+                </CardActionArea>
+              </Card>
+            );
+          })
+        }
+      </Box>
     </div>
 
 
