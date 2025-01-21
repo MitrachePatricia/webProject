@@ -1,7 +1,4 @@
-import {
-  MDBBtn, MDBContainer,
-  MDBInput,
-} from "mdb-react-ui-kit"
+import { MDBBtn, MDBContainer, MDBInput } from "mdb-react-ui-kit";
 import axios from 'axios';
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from 'react';
@@ -33,40 +30,32 @@ const style = {
 function MainPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [openCreate, setOpenCreate] = useState(false);
+  const [open, setOpen] = useState(false);
   const [openJoin, setOpenJoin] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false);
-  const [currentActivity, setCurrentActivity] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [feedbacks, setFeedbacks] = useState([]);
+  const handleOpenCreate = () => setOpen(true);
+  const handleCloseCreate = () => setOpen(false);
+  const handleOpenJoin = () => setOpenJoin(true);
+  const handleCloseJoin = () => setOpenJoin(false);
   const [activityname, setactivityname] = useState("");
-  const [activityCode, setnewActivityCode] = useState("");
+  const [newActivityCode, setnewActivityCode] = useState("");
   const [joinActivitystate, setjoinActivitystate] = useState("");
   const [activityDescription, setactivityDescription] = useState("");
   const [activityStartTime, setactivityStartTime] = useState("");
   const [activities, setActivities] = useState([]);
 
-  const handleOpenCreate = () => setOpenCreate(true);
-  const handleCloseCreate = () => setOpenCreate(false);
-  const handleOpenJoin = () => setOpenJoin(true);
-  const handleCloseJoin = () => setOpenJoin(false);
-  const handleOpenEdit = (activity) => {
-    setCurrentActivity(activity);
-    setactivityname(activity.activityname);
-    setactivityDescription(activity.activityDescription);
-    setactivityStartTime(activity.startTime);
-    setOpenEdit(true);
-  };
-  const handleCloseEdit = () => setOpenEdit(false);
-
   const handleFeedback = async (emojiName) => {
     const timestamp = new Date().toISOString();
     const feedback = {
-      emoji: emojiName,
+      feedbackMsg: emojiName,
       timestamp: timestamp,
       _id: location.state._id,
     };
 
     try {
-      await axios.post('http://localhost:3000/api/feedback', feedback); // idk where to send it 
+      await axios.post('http://localhost:3000/api/activityFeedback', feedback);
+      setFeedbacks(prevFeedbacks => [...prevFeedbacks, feedback]);
       alert('Feedback sent successfully');
     } catch (error) {
       console.error('Error sending feedback:', error);
@@ -74,51 +63,44 @@ function MainPage() {
     }
   };
 
-
-  function generateRandomCode(length) {
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-      result += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return result;
+  async function endSession() {
+    await axios.patch('http://localhost:3000/api/activityEnd/${location.state._id}')
+      .then(res => {
+        alert('Session ended successfully');
+      })
+      .catch(err => {
+        console.error('Error ending session:', err);
+        alert('Failed to end session');
+      });
   }
 
   async function createActivityApi() {
-    const activityCode = generateRandomCode(6);
-
     await axios.post(`http://localhost:3000/api/activity`, {
       activityname: activityname,
-      activityCode: activityCode,
       activityDescription: activityDescription,
       startTime: activityStartTime.slice(0, activityStartTime.indexOf("GMT")),
       createdBy: location.state._id
     })
       .then(res => {
-        alert("Activity Created.\n Activity code: " + activityCode)
-        setOpenCreate(false);
-        console.log(res)
+        alert("Activity Created");
+        setnewActivityCode(res.data.activityCode);
+        setOpen(false);
+        console.log(res);
       })
       .catch(err => {
-        console.log(err)
-      })
+        console.log(err);
+      });
   }
 
   async function joinActivity() {
-    await axios.get(`http://localhost:3000/api/activityAccess/${joinActivitystate}`)
+    console.log(`http://localhost:3000/api/activityAccess/${joinActivitystate}/${location.state._id}`);
+    await axios.get(`http://localhost:3000/api/activityAccess/${joinActivitystate}/${location.state._id}`)
       .then(res => {
-        if (res.data.msg === "Activity found and it's available") {
-          alert("Activity joined successfully");
+        console.log(res);
+        if (res.data.msg == "Activity found and it's available") {
+          alert("Activity found and it's available");
           setOpenJoin(false);
-
-          setActivities(prevActivities => [
-            ...prevActivities,
-            res.data.activity
-          ]);
-          setSelectedActivity(res.data.activity);
-        } else {
-          alert("Activity found but it's not available anymore.");
-        }
+        } else alert("Activity found but it's not available");
       })
       .catch(err => {
         alert(err.response.data.msg);
@@ -126,69 +108,53 @@ function MainPage() {
       });
   }
 
-  async function editActivityApi() {
-    await axios.put(`http://localhost:3000/api/activity/${currentActivity._id}`, {
-      activityname: activityname,
-      activityDescription: activityDescription,
-      startTime: activityStartTime.slice(0, activityStartTime.indexOf("GMT")),
-    }).then(res => {
-      alert("Activity update successfully");
-      setOpenEdit(false);
-      setCurrentActivity(null);
-      console.log(res)
+  useEffect(() => {
+    if (location.state.userRole == "Teacher") {
       axios.get(`http://localhost:3000/api/activitiesPerUser/${location.state._id}`)
         .then(res => {
           setActivities(res.data);
           console.log(res);
         })
         .catch(err => {
+          alert(err.response.data.msg);
           console.log(err);
         });
-      console.log(res);
-    })
-      .catch(err => {
-        console.log(err);
-      });
-  }
-
-  useEffect(() => {
-    axios.get(`http://localhost:3000/api/activitiesPerUser/${location.state._id}`)
-      .then(res => {
-        setActivities(res.data)
-        console.log(res)
-      })
-      .catch(err => {
-        alert(err.response.data.msg)
-        console.log(err)
-      })
-  }, [location.state._id]);
+    } else {
+      axios.get(`http://localhost:3000/api/activitiesPerStudent/${location.state._id}`)
+        .then(res => {
+          setActivities(res.data);
+          console.log(res);
+        })
+        .catch(err => {
+          alert(err.response.data.msg);
+          console.log(err);
+        });
+    }
+  }, [location.state._id, location.state.userRole]);
 
   return (
     <div style={{ display: 'flex' }}>
-      <div style={{ flex: 1 }}>
-        <h1>MainPage</h1>
+      <div style={{ flex: 1, textAlign: 'center', borderBottom: '1px solid black' }}>
+        <h1>{location.state?.userRole === "Student" ? "Student Page" : "Teacher Page"}</h1>
 
-        {
-          (location.state?.userRole == "Teacher") &&
+        {location.state?.userRole == "Teacher" && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
             <MDBBtn className="mb-4" onClick={handleOpenCreate}>
               Create
             </MDBBtn>
           </div>
-
-        }
-        {
-          (location.state?.userRole === "Student") &&
+        )}
+        {location.state?.userRole === "Student" && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
             <MDBBtn className="mb-4" onClick={handleOpenJoin}>
               Join
             </MDBBtn>
           </div>
-        }
+        )}
 
-        {/*This is the modal for creating an activity*/}
+        {/* This is the modal for creating an activity */}
         <Modal
-          open={openCreate}
+          open={open}
           onClose={handleCloseCreate}
           aria-labelledby="modal-modal-title"
           aria-describedby="modal-modal-description"
@@ -215,17 +181,18 @@ function MainPage() {
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <DemoContainer components={['DateTimePicker']}>
                 <DateTimePicker onAccept={e => {
-                  setactivityStartTime(e.$d.toString())
+                  setactivityStartTime(e.$d.toString());
                 }} label="Closing Date" />
               </DemoContainer>
             </LocalizationProvider>
             <br />
             <MDBBtn className="mb-4" onClick={createActivityApi}>
-              Create</MDBBtn>
+              Create
+            </MDBBtn>
           </Box>
         </Modal>
 
-        {/*This is the modal that pops up when a student wants to join an activity*/}
+        {/* This is the modal that pops up when a student wants to join an activity */}
         <Modal
           open={openJoin}
           onClose={handleCloseJoin}
@@ -233,167 +200,96 @@ function MainPage() {
           aria-describedby="modal-modal-description"
         >
           <Box sx={style}>
-
             <h2>Join Activity</h2>
             <p>Enter activity code:</p>
             <MDBInput wrapperClass='mb-4' label='Code' id='form1' type='name' onChange={e => {
               setjoinActivitystate(e.target.value);
             }} />
-
             <MDBBtn className="mb-4" onClick={joinActivity}>
-              Join</MDBBtn>
+              Join
+            </MDBBtn>
           </Box>
         </Modal>
+        
+        <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+              {activities.map(item => {
+                return (
+                  <CardActionArea key={item._id} sx={{ width: '100%', maxWidth: '100%', margin: 2 }}>
+                    <Card sx={{ width: '100%', height: 400, border: 1 }}>
+                      <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'center' }}>
+                        <Typography gutterBottom variant="h5" component="div" sx={{ textAlign: 'center' }}>
+                          {item.activityname}
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                          {item.activityDescription}
+                        </Typography>
+                        <Typography variant="body3" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                          {item.startTime}
+                        </Typography>
+                        <Typography variant="body3" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                          {item.activityCode}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </CardActionArea>
+                );
+              })}
+            </Box>
+        </Box>
 
-        {/*This is the modal that pops up when a teacher wants to edit an activity*/}
-        <Modal
-          open={openEdit}
-          onClose={handleCloseEdit}
-          aria-labelledby="modal-modal-title"
-          aria-describedby="modal-modal-description"
-        >
-          <Box sx={style}>
-            <h2>Edit Activity</h2>
-            <p>Enter activity name:</p>
-            <MDBInput wrapperClass='mb-4' label='Name' id='form1' type='name' value={activityname} onChange={e => {
-              setactivityname(e.target.value);
-            }} />
-            <p>Enter a short description:</p>
-            <MDBInput wrapperClass='mb-4' label='Short Description' id='form2' type='text' value={activityDescription} onChange={e => {
-              setactivityDescription(e.target.value);
-            }} />
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DemoContainer components={['DateTimePicker']}>
-                <DateTimePicker onAccept={e => {
-                  setactivityStartTime(e.$d.toString())
-                }} label="Closing Date" />
-              </DemoContainer>
-            </LocalizationProvider>
-            <br />
-            <MDBBtn className="mb-4" onClick={editActivityApi}>
-              Edit</MDBBtn>
+        {/* This is the end session button */}
+        {location.state?.userRole === "Teacher" && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            <MDBBtn className="mb-4" onClick={endSession}>
+              End session
+            </MDBBtn>
+          </div>
+        )}
+
+        {/* This is the feedback section */}
+        {location.state?.userRole === "Student" && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
+            {activities.map(item => {
+              return (
+                <Card key={item._id} sx={{ width: '80%', maxWidth: '50%', border: 1, margin: 2 }}>
+                  <CardContent sx={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 200 }}>
+                    <CardActionArea onClick={() => handleFeedback('smile')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
+                      <img src={`/emoticons/smile.png`} alt="smile" style={{ width: '100%', height: '100%' }} />
+                    </CardActionArea>
+                    <CardActionArea onClick={() => handleFeedback('frowny')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
+                      <img src={`/emoticons/frowny.png`} alt="frowny" style={{ width: '100%', height: '100%' }} />
+                    </CardActionArea>
+                    <CardActionArea onClick={() => handleFeedback('confused')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
+                      <img src={`/emoticons/confused.png`} alt="confused" style={{ width: '100%', height: '100%' }} />
+                    </CardActionArea>
+                    <CardActionArea onClick={() => handleFeedback('surprised')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
+                      <img src={`/emoticons/surprised.png`} alt="surprised" style={{ width: '100%', height: '100%' }} />
+                    </CardActionArea>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </Box>
-        </Modal>
+        )}
 
-        {/*This is what the student sees when he joins an activity*/}
+        {/* This is the feedback display section */}
+        {location.state?.userRole === "Teacher" && (
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-          {activities.map(item => {
-            return (
-              <CardActionArea key={item._id} sx={{ width: '100%', maxWidth: '100%', margin: 2 }}>
-                <Card sx={{ width: '100%', height: 400, border: 1 }}>
-                  <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'center' }}>
-                    <Typography gutterBottom variant="h5" component="div" sx={{ textAlign: 'center' }}>
-                      {item.activityname}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      {item.activityDescription}
-                    </Typography>
-                    <Typography variant="body3" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      {item.startTime}
-                    </Typography>
-                    <Typography variant="body3" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      {item.activityCode}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </CardActionArea>
-            );
-          })}
-        </Box>
-
-        {/*This is the feedback section*/}
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-          {activities.map(item => {
-            return (
-              <Card key={item._id} sx={{ width: '80%', maxWidth: '50%', border: 1, margin: 2 }}>
-                <CardContent sx={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', height: 200 }}>
-                  <CardActionArea onClick={() => handleFeedback('smile')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
-                    <img src={`/emoticons/smile.png`} alt="smile" style={{ width: '100%', height: '100%' }} />
-                  </CardActionArea>
-                  <CardActionArea onClick={() => handleFeedback('frowny')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
-                    <img src={`/emoticons/frowny.png`} alt="frowny" style={{ width: '100%', height: '100%' }} />
-                  </CardActionArea>
-                  <CardActionArea onClick={() => handleFeedback('confused')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
-                    <img src={`/emoticons/confused.png`} alt="confused" style={{ width: '100%', height: '100%' }} />
-                  </CardActionArea>
-                  <CardActionArea onClick={() => handleFeedback('surprised')} sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', border: 1, width: 120, height: 120 }}>
-                    <img src={`/emoticons/surprised.png`} alt="surprised" style={{ width: '100%', height: '100%' }} />
-                  </CardActionArea>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </Box>
-
-        {/*This is what a teacher is supposed to see*/}
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-          {activities.map(item => {
-            return (
-              <CardActionArea key={item._id} onClick={() => handleOpenEdit(item)} sx={{ width: '100%', maxWidth: '100%', margin: 2 }}>
-                <Card sx={{ width: '100%', height: 400, border: 1 }}>
-                  <CardContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'center' }}>
-                    <Typography gutterBottom variant="h5" component="div" sx={{ textAlign: 'center' }}>
-                      {item.activityname}
-                    </Typography>
-                    <Typography variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      {item.activityDescription}
-                    </Typography>
-                    <Typography variant="body3" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      {item.startTime}
-                    </Typography>
-                    <Typography variant="body3" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      {item.activityCode}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </CardActionArea>
-            );
-          })}
-        </Box>
-
-        {/*This is the feedback section for the teacher*/}
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', width: '100%' }}>
-          {activities.map(item => {
-            return (
-              <Card key={item._id} sx={{ width: '80%', maxWidth: '50%', border: 1, margin: 2 }}>
-                <CardContent sx={{ maxHeight: 200, overflowY: 'auto' }}>
-                  {/* {feedbacks.map((feedback, index) => (
-                    <Typography key={index} variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
-                      Anonymous reacted {feedback.emoji} at {feedback.timestamp}
-                    </Typography>
-                  ))} */}
-
-                {/* need to add the feedback route, this is just a mock rn */}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </Box>
-
-      </div>
-
-      {/* <div style={{ flex: 1, marginLeft: '20px' }}>
-        {selectedActivity && (
-          <Card sx={{ maxWidth: 345, border: 1, marginBottom: 2 }}>
-            <CardContent>
-              <Typography gutterBottom variant="h5" component="div">
-                {selectedActivity.activityname}
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                {selectedActivity.activityDescription}
-              </Typography>
-              <Typography variant="body3" sx={{ color: 'text.secondary' }}>
-                {selectedActivity.startTime}
-              </Typography>
-              <Typography variant="body3" sx={{ color: 'text.secondary' }}>
-                {selectedActivity.activityCode}
-              </Typography>
+          <Card sx={{ width: '80%', maxWidth: '50%', border: 1, margin: 2 }}>
+            <CardContent sx={{ maxHeight: 200, overflowY: 'auto' }}>
+              {feedbacks.map((feedback, index) => (
+                <Typography key={index} variant="body2" sx={{ color: 'text.secondary', textAlign: 'center' }}>
+                  Anonymous reacted {feedback.emoji} at {feedback.timestamp}
+                </Typography>
+              ))}
             </CardContent>
           </Card>
-        )}
-      </div> */}
+        </Box>
+        )};
+      </div>
     </div>
-  )
+  );
 }
 
 export default MainPage;
